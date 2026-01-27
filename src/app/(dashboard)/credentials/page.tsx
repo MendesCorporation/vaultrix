@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button, Card, Badge, Input } from '@/components/ui'
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal'
 import { Select } from '@/components/ui/Select'
@@ -18,7 +19,7 @@ import {
   ExternalLink,
   Server,
   Cloud,
-  Share2
+  Copy,
 } from 'lucide-react'
 
 type CredentialType = 'LOGIN_PASSWORD' | 'API_TOKEN' | 'CLIENT_SECRET'
@@ -50,21 +51,11 @@ interface Machine {
   hostname: string
 }
 
-interface Group {
-  id: string
-  name: string
-}
-
-interface Permission {
-  id: string
-  actions: Array<'CREATE' | 'READ' | 'UPDATE' | 'DELETE'>
-  group?: { id: string; name: string } | null
-}
-
 export default function CredentialsPage() {
   const toast = useToast()
   const { confirm } = useConfirm()
   const { t } = useLocale()
+  const router = useRouter()
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [platforms, setPlatforms] = useState<Platform[]>([])
   const [machines, setMachines] = useState<Machine[]>([])
@@ -76,12 +67,6 @@ export default function CredentialsPage() {
   const [platformFilter, setPlatformFilter] = useState('')
   const [machineFilter, setMachineFilter] = useState('')
   const [formError, setFormError] = useState('')
-  const [groups, setGroups] = useState<Group[]>([])
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
-  const [shareTarget, setShareTarget] = useState<Credential | null>(null)
-  const [shareGroupId, setShareGroupId] = useState('')
-  const [shareActions, setShareActions] = useState<Array<'READ' | 'UPDATE' | 'DELETE'>>([])
-  const [resourcePermissions, setResourcePermissions] = useState<Permission[]>([])
 
   const [formData, setFormData] = useState({
     name: '',
@@ -130,20 +115,9 @@ export default function CredentialsPage() {
     }
   }
 
-  const fetchGroups = async () => {
-    try {
-      const res = await fetch('/api/groups')
-      const data = await res.json()
-      setGroups(data.data || [])
-    } catch (error) {
-      console.error('Failed to fetch groups:', error)
-    }
-  }
-
   useEffect(() => {
     fetchCredentials()
     fetchPlatformsAndMachines()
-    fetchGroups()
   }, [search, platformFilter, machineFilter])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -249,40 +223,6 @@ export default function CredentialsPage() {
     }
   }
 
-  const openShareModal = async (credential: Credential) => {
-    setShareTarget(credential)
-    setIsShareModalOpen(true)
-    setShareGroupId('')
-    setShareActions([])
-
-    try {
-      const res = await fetch(`/api/permissions?resourceType=CREDENTIAL&resourceId=${credential.id}`)
-      const data = await res.json()
-      setResourcePermissions(data.data || [])
-    } catch (error) {
-      console.error('Failed to fetch permissions:', error)
-    }
-  }
-
-  const handleShareGroupChange = (groupId: string) => {
-    setShareGroupId(groupId)
-    const existing = resourcePermissions.find((p) => p.group?.id === groupId)
-    if (existing) {
-      const filtered = existing.actions.filter(
-        (action) => action === 'READ' || action === 'UPDATE' || action === 'DELETE'
-      ) as Array<'READ' | 'UPDATE' | 'DELETE'>
-      setShareActions(filtered)
-    } else {
-      setShareActions([])
-    }
-  }
-
-  const toggleShareAction = (action: 'READ' | 'UPDATE' | 'DELETE') => {
-    setShareActions((prev) =>
-      prev.includes(action) ? prev.filter((a) => a !== action) : [...prev, action]
-    )
-  }
-
   const handleTypeChange = (value: CredentialType) => {
     // Check if current platform supports the new type
     const currentPlatform = platforms.find((p) => p.id === formData.platformId)
@@ -309,34 +249,6 @@ export default function CredentialsPage() {
       clientId: '',
       clientSecret: '',
     }))
-  }
-
-  const saveShare = async () => {
-    if (!shareTarget || !shareGroupId) return
-
-    try {
-      const res = await fetch('/api/permissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          groupId: shareGroupId,
-          resourceType: 'CREDENTIAL',
-          resourceId: shareTarget.id,
-          actions: shareActions,
-        }),
-      })
-
-      if (!res.ok) {
-        const error = await res.json()
-        toast.error(error.error || t('credentials.errors.share'))
-        return
-      }
-
-      setIsShareModalOpen(false)
-      toast.success(t('credentials.shareSuccess'))
-    } catch (error) {
-      console.error('Failed to save share:', error)
-    }
   }
 
   const resetForm = () => {
@@ -395,11 +307,6 @@ export default function CredentialsPage() {
   const machineOptions = [
     { value: '', label: t('credentials.options.none') },
     ...machines.map((m) => ({ value: m.id, label: m.hostname })),
-  ]
-
-  const groupOptions = [
-    { value: '', label: t('machines.selectGroup') },
-    ...groups.map((g) => ({ value: g.id, label: g.name })),
   ]
 
   const selectedPlatform = platforms.find((platform) => platform.id === formData.platformId)
@@ -525,10 +432,10 @@ export default function CredentialsPage() {
                   <tr key={credential.id} className="hover:bg-dark-50 dark:hover:bg-dark-800/50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
                           <Key className="h-5 w-5 text-green-600 dark:text-green-400" />
                         </div>
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <p className="font-medium">{credential.name}</p>
                           {credential.url && (
                             <a
@@ -536,82 +443,117 @@ export default function CredentialsPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 text-sm text-primary-500 hover:underline"
+                              title={credential.url}
                             >
-                              {credential.url}
-                              <ExternalLink className="h-3 w-3" />
+                              <span className="truncate max-w-[180px]">{credential.url}</span>
+                              <ExternalLink className="h-3 w-3 flex-shrink-0" />
                             </a>
                           )}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      {credential.type === 'CLIENT_SECRET' ? (
-                        <PasswordReveal
-                          className="max-w-xs"
-                          onReveal={() => handleRevealSecret(credential.id, 'clientId')}
-                          onCopyAudit={() => logCredentialCopy(credential.id, 'clientId')}
-                        />
-                      ) : (
-                        <span className="font-mono text-sm">{credential.username || '-'}</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {credential.type === 'CLIENT_SECRET' ? (
-                        <PasswordReveal
-                          onReveal={() => handleRevealSecret(credential.id, 'clientSecret')}
-                          onCopyAudit={() => logCredentialCopy(credential.id, 'clientSecret')}
-                        />
-                      ) : (
-                        <PasswordReveal
-                          onReveal={() => handleRevealSecret(
-                            credential.id,
-                            credential.type === 'API_TOKEN' ? 'token' : 'password'
-                          )}
-                          onCopyAudit={() => logCredentialCopy(
-                            credential.id,
-                            credential.type === 'API_TOKEN' ? 'token' : 'password'
-                          )}
-                        />
-                      )}
+                      <div className="flex items-center gap-2">
+                        {credential.type === 'CLIENT_SECRET' ? (
+                          <>
+                            <div className="flex-1 rounded-lg bg-dark-100 px-3 py-2 font-mono text-sm dark:bg-dark-700">
+                              ••••••••••••
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={async () => {
+                                try {
+                                  const value = await handleRevealSecret(credential.id, 'clientId')
+                                  await navigator.clipboard.writeText(value)
+                                  await logCredentialCopy(credential.id, 'clientId')
+                                  toast.success(t('common.copied'))
+                                } catch (error) {
+                                  toast.error(t('credentials.errors.reveal'))
+                                }
+                              }}
+                              title={t('common.copy')}
+                              className="flex-shrink-0"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </Button>
+                          </>
+                        ) : (
+                          <span className="font-mono text-sm">
+                            {credential.username || '-'}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
+                        <div className="flex-1 rounded-lg bg-dark-100 px-3 py-2 font-mono text-sm dark:bg-dark-700">
+                          ••••••••••••
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={async () => {
+                            try {
+                              const field = credential.type === 'CLIENT_SECRET' ? 'clientSecret' : 
+                                           credential.type === 'API_TOKEN' ? 'token' : 'password'
+                              const value = await handleRevealSecret(credential.id, field)
+                              await navigator.clipboard.writeText(value)
+                              await logCredentialCopy(credential.id, field)
+                              toast.success(t('common.copied'))
+                            } catch (error) {
+                              toast.error(t('credentials.errors.reveal'))
+                            }
+                          }}
+                          title={t('common.copy')}
+                          className="flex-shrink-0"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap items-center gap-2">
                         {credential.platform && (
                           <Badge variant="secondary">
-                            <Cloud className="mr-1 h-3 w-3" />
-                            {credential.platform.name}
+                            <Cloud className="mr-1 h-3 w-3 flex-shrink-0" />
+                            <span>{credential.platform.name}</span>
                           </Badge>
                         )}
                         {credential.machine && (
                           <Badge variant="outline">
-                            <Server className="mr-1 h-3 w-3" />
-                            {credential.machine.hostname}
+                            <Server className="mr-1 h-3 w-3 flex-shrink-0" />
+                            <span className="inline-block max-w-[80px] overflow-hidden text-ellipsis whitespace-nowrap" title={credential.machine.hostname}>
+                              {credential.machine.hostname}
+                            </span>
                           </Badge>
                         )}
                         {!credential.platform && !credential.machine && '-'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-2 whitespace-nowrap">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => router.push(`/credentials/${credential.id}`)}
+                          title={t('common.viewDetails')}
+                        >
+                          {t('common.details')}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => openModal(credential)}
+                          title={t('common.edit')}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => openShareModal(credential)}
-                          title={t('common.share')}
-                        >
-                          <Share2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
                           onClick={() => handleDelete(credential.id)}
+                          title={t('common.delete')}
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -736,46 +678,6 @@ export default function CredentialsPage() {
             </Button>
           </ModalFooter>
         </form>
-      </Modal>
-
-      <Modal open={isShareModalOpen} onClose={() => setIsShareModalOpen(false)}>
-        <ModalHeader onClose={() => setIsShareModalOpen(false)}>
-          {t('credentials.shareTitle')}
-        </ModalHeader>
-        <ModalBody>
-          <Select
-            label={t('machines.shareModal.groupLabel')}
-            options={groupOptions}
-            value={shareGroupId}
-            onChange={(e) => handleShareGroupChange(e.target.value)}
-          />
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">{t('common.permissions')}</label>
-            <div className="flex flex-wrap gap-4 text-sm">
-              {(['READ', 'UPDATE', 'DELETE'] as const).map((action) => (
-                <label key={action} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={shareActions.includes(action)}
-                    onChange={() => toggleShareAction(action)}
-                  />
-                  {action === 'READ' && t('common.read')}
-                  {action === 'UPDATE' && t('common.update')}
-                  {action === 'DELETE' && t('common.deleteAction')}
-                </label>
-              ))}
-            </div>
-          </div>
-        </ModalBody>
-        <ModalFooter>
-          <Button variant="secondary" type="button" onClick={() => setIsShareModalOpen(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="button" onClick={saveShare}>
-            {t('common.save')}
-          </Button>
-        </ModalFooter>
       </Modal>
     </div>
   )

@@ -24,16 +24,16 @@ const createPlatformSchema = z.object({
   supportsClientSecret: z.boolean().optional().default(false),
   isProvider: z.boolean().optional().default(false),
 }).refine((data) => {
-  // Exatamente um tipo de credencial deve ser suportado
+  // Pelo menos um tipo de credencial deve ser suportado
   const supportTypes = [
     data.supportsLogin,
     data.supportsApiToken,
     data.supportsClientSecret
   ].filter(Boolean)
   
-  return supportTypes.length === 1
+  return supportTypes.length >= 1
 }, {
-  message: "Exatamente um tipo de credencial deve ser selecionado",
+  message: "Pelo menos um tipo de credencial deve ser selecionado",
   path: ["credentialType"]
 })
 

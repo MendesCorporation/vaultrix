@@ -101,8 +101,10 @@ export function PasswordReveal({ onReveal, onRevealAudit, onCopyAudit, className
 
   return (
     <div className={`flex items-center gap-2 ${className}`}>
-      <div className="flex-1 rounded-lg bg-dark-100 px-3 py-2 font-mono text-sm dark:bg-dark-700">
-        {isRevealed && password ? password : '••••••••••••'}
+      <div className="flex-1 min-w-0 rounded-lg bg-dark-100 px-3 py-2 font-mono text-sm dark:bg-dark-700">
+        <span className={isRevealed && password ? 'block truncate' : ''} title={isRevealed && password ? password : undefined}>
+          {isRevealed && password ? password : '••••••••••••'}
+        </span>
       </div>
       <Button
         variant="ghost"
@@ -110,6 +112,7 @@ export function PasswordReveal({ onReveal, onRevealAudit, onCopyAudit, className
         onClick={handleReveal}
         isLoading={isLoading}
         title={isRevealed ? t('passwordReveal.hide') : t('passwordReveal.reveal')}
+        className="flex-shrink-0"
       >
         {isRevealed ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </Button>
@@ -119,6 +122,7 @@ export function PasswordReveal({ onReveal, onRevealAudit, onCopyAudit, className
         onClick={handleCopy}
         title={t('passwordReveal.copy')}
         isLoading={isCopying}
+        className="flex-shrink-0"
       >
         {copied ? (
           <Check className="h-4 w-4 text-green-500" />
