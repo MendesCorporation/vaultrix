@@ -2,6 +2,12 @@
 
 Get Vaultrix up and running in under 5 minutes!
 
+> **ℹ️ First-Time Setup**: If using a seeded database, a temporary admin account is available:
+> - Email: `admin@invetrix.local`
+> - Password: `Admin@123!`
+> 
+> **This account is automatically deleted** after you complete the setup wizard and create your own admin account.
+
 ## Prerequisites
 
 - Docker and Docker Compose installed
@@ -59,8 +65,13 @@ Get Vaultrix up and running in under 5 minutes!
 
 7. **Access Vaultrix**:
    - Open your browser: `http://localhost:3000`
-   - Complete the setup wizard
+   - You'll be redirected to the setup wizard
    - Create your admin account
+
+   **First-Time Setup Only**: If the database was seeded, you can login with temporary credentials:
+   - **Email**: `admin@invetrix.local`
+   - **Password**: `Admin@123!`
+   - This temporary account is **automatically deleted** after completing the setup wizard
 
 ### Option 2: Using Docker Run
 

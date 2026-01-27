@@ -151,8 +151,13 @@
 
 5. **Access Vaultrix**:
    - Open your browser and navigate to `http://localhost:3000`
-   - Complete the initial setup wizard
+   - You'll be redirected to the setup wizard
    - Create your admin account
+   
+   **First-Time Setup Only**: If the database was seeded, you can login with temporary credentials to access the setup:
+   - **Email**: `admin@invetrix.local`
+   - **Password**: `Admin@123!`
+   - This temporary account is **automatically deleted** after you complete the setup wizard
 
 ### Development Setup
 
@@ -201,6 +206,13 @@
 
 8. **Access the application**:
    - Open `http://localhost:3000`
+   - You'll be redirected to the setup wizard
+   - Create your admin account
+
+   **First-Time Setup Only**: If the database was seeded, you can login with temporary credentials:
+   - **Email**: `admin@invetrix.local`
+   - **Password**: `Admin@123!`
+   - This temporary account is **automatically deleted** after completing the setup wizard
 
 ### Using Docker Compose for Development
 
@@ -232,6 +244,14 @@ Vaultrix is built with modern technologies:
 - **Deployment**: Docker, Docker Compose
 
 ### Security Architecture
+
+> **ℹ️ Temporary Setup Account**
+> 
+> For first-time setup with a seeded database, a temporary admin account is created:
+> - **Email**: `admin@invetrix.local`
+> - **Password**: `Admin@123!`
+> 
+> **This account is automatically deleted after you complete the setup wizard** and create your own admin account. It only exists to facilitate the initial setup process.
 
 1. **Data Encryption**:
    - User passwords: Argon2id hashing
