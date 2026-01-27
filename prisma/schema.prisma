@@ -1,0 +1,474 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ USUÁRIOS E AUTENTICAÇÃO ============
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  USER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  encryptedDEK  String    // DEK criptografada com Master Key
+  salt          String    // Salt para derivação da Master Key
+  role          UserRole  @default(USER)
+  mfaEnabled    Boolean   @default(false)
+  mfaSecret     String?
+  isActive      Boolean   @default(true)
+  locale        String    @default("pt")
+  lastLoginAt   DateTime?
+  lastLoginIp   String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  groups        UserGroup[]
+  permissions   Permission[]
+  machines      Machine[]
+  credentials   Credential[]
+  auditLogs     AuditLog[]
+  sessions      Session[]
+  invites       Invite[]
+  alerts        Alert[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  expiresAt    DateTime
+  ipAddress    String
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// ============ GRUPOS E PERMISSÕES ============
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       UserGroup[]
+  permissions Permission[]
+
+  @@index([name])
+}
+
+model UserGroup {
+  id        String   @id @default(cuid())
+  userId    String
+  groupId   String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([userId])
+  @@index([groupId])
+}
+
+enum ResourceType {
+  MACHINE
+  CREDENTIAL
+  PLATFORM
+  STACK
+  USER
+  GROUP
+  ALERT
+}
+
+enum CredentialType {
+  LOGIN_PASSWORD
+  API_TOKEN
+  CLIENT_SECRET
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+}
+
+model Permission {
+  id           String             @id @default(cuid())
+  userId       String?
+  groupId      String?
+  resourceType ResourceType
+  resourceId   String?
+  actions      PermissionAction[]
+  createdAt    DateTime           @default(now())
+
+  user         User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group        Group?             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([groupId])
+  @@index([resourceType])
+  @@index([resourceId])
+}
+
+// ============ INVENTÁRIO E CREDENCIAIS ============
+
+model Platform {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  logoUrl     String?
+  category    String?
+  description String?
+  supportsLogin       Boolean @default(true)
+  supportsApiToken    Boolean @default(false)
+  supportsClientSecret Boolean @default(false)
+  isProvider          Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  credentials Credential[]
+
+  @@index([name])
+  @@index([category])
+}
+
+model Stack {
+  id            String   @id @default(cuid())
+  name          String   @unique
+  imageUrl      String?
+  env           String?
+  dockerCompose String?
+  instructions  String?
+  mode          String   @default("manual")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  deployments   StackDeployment[]
+
+  @@index([name])
+}
+
+model StackDeployment {
+  id            String    @id @default(cuid())
+  stackId       String
+  machineId     String
+  folderName    String
+  status        String    @default("pending")
+  logs          String?
+  errorMessage  String?
+  deployedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  stack         Stack     @relation(fields: [stackId], references: [id], onDelete: Cascade)
+  machine       Machine   @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@index([stackId])
+  @@index([machineId])
+  @@index([status])
+}
+
+model Machine {
+  id              String   @id @default(cuid())
+  hostname        String
+  ip              String?
+  description     String?
+  os              String?
+  osVersion       String?
+  specs           Json?
+  encryptedUser   String?
+  encryptedPass   String?
+  encryptedSSHKey String?
+  sshPort         Int      @default(22)
+  keyVersion      Int      @default(1)
+  notes           String?
+  tags            String[]
+  isActive        Boolean  @default(true)
+  providerId      String?
+  telemetryToken  String?  @unique
+  telemetryEnabled Boolean @default(false)
+  telemetryIntervalMin Int @default(1)
+  telemetryInstalledAt DateTime?
+  lastTelemetryAt DateTime?
+  createdById     String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  provider        MachineProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  createdBy       User     @relation(fields: [createdById], references: [id])
+  credentials     Credential[]
+  telemetry       MachineTelemetry[]
+  alerts          Alert[]
+  alertStates     AlertState[]
+  stackDeployments StackDeployment[]
+  backupConfigs   BackupConfig[]
+
+  @@index([hostname])
+  @@index([ip])
+  @@index([createdById])
+  @@index([providerId])
+  @@index([tags])
+}
+
+model MachineTelemetry {
+  id              String   @id @default(cuid())
+  machineId       String
+  cpuUsage        Float?
+  cpuCores        Int?
+  memoryTotalMb   Int?
+  memoryAvailMb   Int?
+  memoryUsedMb    Int?
+  memoryPercent   Float?
+  diskTotalGb     Float?
+  diskUsedGb      Float?
+  diskPercent     Float?
+  loadAvg1        Float?
+  loadAvg5        Float?
+  loadAvg15       Float?
+  containers      Json?
+  createdAt       DateTime @default(now())
+
+  machine         Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@index([machineId])
+  @@index([createdAt])
+}
+
+// ============ ALERTAS ============
+
+model Alert {
+  id              String   @id @default(cuid())
+  name            String
+  userId          String
+  machineId       String?
+  cpuThreshold    Float?
+  memoryThreshold Float?
+  containerDown   Boolean  @default(false)
+  machineOffline  Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  machine         Machine? @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  states          AlertState[]
+
+  @@index([userId])
+  @@index([machineId])
+}
+
+model AlertState {
+  id              String   @id @default(cuid())
+  alertId         String?
+  machineId       String
+  type            String   @default("CUSTOM") // CUSTOM, MACHINE_OFFLINE
+  key             String?
+  message         String?
+  isActive        Boolean  @default(false)
+  active          Boolean  @default(false) // Manter por compatibilidade
+  triggeredAt     DateTime?
+  resolvedAt      DateTime?
+  lastTriggeredAt DateTime? // Manter por compatibilidade
+  lastResolvedAt  DateTime? // Manter por compatibilidade
+  lastValue       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  alert           Alert?   @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  machine         Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+
+  @@index([machineId])
+  @@index([isActive])
+  @@index([active])
+  @@index([type])
+}
+
+model MachineProvider {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  machines    Machine[]
+
+  @@index([name])
+}
+
+model Credential {
+  id             String    @id @default(cuid())
+  name           String
+  type           CredentialType @default(LOGIN_PASSWORD)
+  username       String?
+  encryptedPass  String?
+  encryptedToken String?
+  encryptedClientId String?
+  encryptedClientSecret String?
+  url            String?
+  notes          String?
+  keyVersion     Int       @default(1)
+  platformId     String?
+  machineId      String?
+  tags           String[]
+  isActive       Boolean   @default(true)
+  expiresAt      DateTime?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  platform       Platform? @relation(fields: [platformId], references: [id])
+  machine        Machine?  @relation(fields: [machineId], references: [id])
+  createdBy      User      @relation(fields: [createdById], references: [id])
+
+  @@index([name])
+  @@index([platformId])
+  @@index([machineId])
+  @@index([createdById])
+  @@index([tags])
+}
+
+// ============ AUDITORIA ============
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  PASSWORD_CHANGE
+  MFA_ENABLED
+  MFA_DISABLED
+  MFA_INVALID
+  PERMISSION_GRANTED
+  PERMISSION_REVOKED
+  SECRET_VIEWED
+  SECRET_COPIED
+  EXPORT
+}
+
+model AuditLog {
+  id           String        @id @default(cuid())
+  userId       String?
+  action       AuditAction
+  resourceType ResourceType?
+  resourceId   String?
+  resourceName String?
+  oldValue     Json?
+  newValue     Json?
+  metadata     Json?
+  ipAddress    String
+  userAgent    String?
+  timestamp    DateTime      @default(now())
+
+  user         User?         @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([resourceId])
+  @@index([timestamp])
+  @@index([ipAddress])
+}
+
+// ============ CONFIGURAÇÕES ============
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+}
+
+model Invite {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  email     String
+  name      String
+  role      UserRole  @default(USER)
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([email])
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  email     String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([email])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+// ============ BACKUP ============
+
+model BackupConfig {
+  id             String    @id @default(cuid())
+  name           String    // Nome da configuração de backup
+  destination    String    @default("local") // "local" or "remote"
+  machineId      String?   // If remote, which machine to use
+  folder         String    @default("/app/storage/backups")
+  retentionDays  Int       @default(7)
+  scheduleTime   String    // e.g., "03:00"
+  scheduleDays   String[]  // e.g., ["monday", "wednesday"] or empty for daily
+  isActive       Boolean   @default(true)
+  lastRunAt      DateTime?
+  lastRunStatus  String?   // "success" or "error"
+  lastRunMessage String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  machine        Machine?  @relation(fields: [machineId], references: [id], onDelete: SetNull)
+
+  @@index([isActive])
+  @@index([scheduleTime])
+}
+
+model BackupHistory {
+  id           String   @id @default(cuid())
+  fileName     String
+  fileSize     Int?     // Size in bytes
+  destination  String   // "local" or "remote"
+  machineId    String?
+  folder       String
+  status       String   // "success" or "error"
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([status])
+}

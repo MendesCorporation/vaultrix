@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vaultrix-app
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}
+      - AUTH_SECRET=${AUTH_SECRET}
+      - AUTH_URL=${AUTH_URL}
+      - ENCRYPTION_PEPPER=${ENCRYPTION_PEPPER}
+      - STORAGE_PATH=/app/storage
+      - BACKUP_PATH=/app/backups
+      - NODE_ENV=${NODE_ENV:-production}
+      - TZ=${TZ:-America/Sao_Paulo}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - vaultrix-network
+    volumes:
+      - storage_data:/app/storage
+      - backup_data:/app/backups
+
+  db:
+    image: postgres:16-alpine
+    container_name: vaultrix-db
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vaultrix-network
+
+volumes:
+  postgres_data:
+  storage_data:
+  backup_data:
+
+networks:
+  vaultrix-network:
+    driver: bridge

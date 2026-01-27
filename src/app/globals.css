@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 255 255 255;
+    --foreground: 15 15 15;
+    --card: 255 255 255;
+    --card-foreground: 15 15 15;
+    --primary: 233 30 99;
+    --primary-foreground: 255 255 255;
+    --secondary: 245 245 245;
+    --secondary-foreground: 15 15 15;
+    --muted: 245 245 245;
+    --muted-foreground: 115 115 115;
+    --accent: 245 245 245;
+    --accent-foreground: 15 15 15;
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+    --border: 229 229 229;
+    --input: 229 229 229;
+    --ring: 233 30 99;
+  }
+
+  .dark {
+    --background: 26 26 29;
+    --foreground: 245 245 245;
+    --card: 45 45 49;
+    --card-foreground: 245 245 245;
+    --primary: 233 30 99;
+    --primary-foreground: 255 255 255;
+    --secondary: 45 45 49;
+    --secondary-foreground: 245 245 245;
+    --muted: 63 64 70;
+    --muted-foreground: 163 163 163;
+    --accent: 63 64 70;
+    --accent-foreground: 245 245 245;
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+    --border: 63 64 70;
+    --input: 63 64 70;
+    --ring: 233 30 99;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .bg-background {
+    background-color: rgb(var(--background));
+  }
+
+  .text-foreground {
+    color: rgb(var(--foreground));
+  }
+
+  .border-border {
+    border-color: rgb(var(--border));
+  }
+}
+
+/* Custom scrollbar - completamente invisível */
+::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: none;
+}
+
+/* Focus styles */
+*:focus-visible {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+}
+
+.dark *:focus-visible {
+  @apply ring-offset-dark-900;
+}
+/* Vaultrix title styling */
+.vaultrix-title {
+  @apply text-foreground;
+}
+
+.dark .vaultrix-title {
+  @apply text-white;
+}
+
+/* Chart text improvements */
+.recharts-text {
+  font-size: 14px !important;
+  fill: rgb(var(--foreground)) !important;
+}
+
+.dark .recharts-text {
+  fill: rgb(var(--foreground)) !important;
+}
+
+/* Tooltip improvements */
+.recharts-tooltip-wrapper {
+  font-size: 14px !important;
+}
+
+.recharts-tooltip-label {
+  font-weight: 600 !important;
+  font-size: 14px !important;
+}
+
+/* Primary color for checkboxes and form elements */
+input[type="checkbox"]:checked {
+  background-color: rgb(var(--primary));
+  border-color: rgb(var(--primary));
+}
+
+input[type="radio"]:checked {
+  background-color: rgb(var(--primary));
+  border-color: rgb(var(--primary));
+}
+
+/* Focus ring with primary color */
+input:focus,
+select:focus,
+textarea:focus {
+  ring-color: rgb(var(--primary));
+  border-color: rgb(var(--primary));
+}

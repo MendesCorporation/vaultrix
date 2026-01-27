@@ -1,0 +1,91 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+package-lock.json
+
+# Testing
+coverage
+*.test.ts.snap
+
+# Next.js
+.next/
+out/
+build
+dist/
+
+# Production
+.vercel
+.netlify
+
+# Misc
+.DS_Store
+*.pem
+*.log
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Local env files
+.env
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# IDE
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.swp
+*.swo
+*~
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# Uploads and Storage
+public/uploads/platforms/*
+!public/uploads/platforms/.gitkeep
+public/uploads/system/*
+!public/uploads/system/.gitkeep
+storage/
+backups/
+
+# Backup files
+*.sql
+*.tar.gz
+vaultrix-backup-*.sql
+vaultrix-backup-*.tar.gz
+
+# Docker
+docker-compose.override.yml
+.dockerignore
+
+# OS
+Thumbs.db
+.DS_Store
+*.swp
+*.swo
+
+# Agent binary
+agent/vaultrix-agent
+agent/vaultrix-agent-*
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Screenshots (keep only in public/)
+screenshots/
