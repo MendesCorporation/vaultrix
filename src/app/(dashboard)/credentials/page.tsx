@@ -432,8 +432,20 @@ export default function CredentialsPage() {
                   <tr key={credential.id} className="hover:bg-dark-50 dark:hover:bg-dark-800/50">
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
-                          <Key className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${
+                          credential.platform?.logoUrl 
+                            ? 'bg-dark-50 dark:bg-dark-800' 
+                            : 'bg-green-100 dark:bg-green-900/30'
+                        }`}>
+                          {credential.platform?.logoUrl ? (
+                            <img
+                              src={credential.platform.logoUrl}
+                              alt={credential.platform.name}
+                              className="h-6 w-6 object-contain"
+                            />
+                          ) : (
+                            <Key className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          )}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-medium">{credential.name}</p>
