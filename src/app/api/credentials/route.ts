@@ -105,21 +105,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Verificar permissão - admins sempre podem, usuários precisam de permissão explícita
-  const isAdmin = session.user.role === 'ADMIN' || session.user.role === 'SUPER_ADMIN'
-
-  if (!isAdmin) {
-    const hasPermission = await checkPermission({
-      userId: session.user.id,
-      action: 'CREATE',
-      resource: 'CREDENTIAL',
-    })
-
-    if (!hasPermission) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-  }
-
+  // Todos os usuários autenticados podem criar credenciais
   const body = await request.json()
   const validation = createCredentialSchema.safeParse(body)
 
