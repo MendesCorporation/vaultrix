@@ -193,13 +193,11 @@ export async function POST(request: NextRequest) {
     const localBackupPath = path.join(tempDir, fileName)
 
     console.log(`[${config.name}] Running pg_dump...`)
-    
-    const { stdout } = await execAsync(
-      `PGPASSWORD="${dbPass}" pg_dump -h "${dbHost}" -p ${dbPort} -U "${dbUser}" -d "${dbName}" -F p`,
-      { maxBuffer: 100 * 1024 * 1024 }
+
+    await execAsync(
+      `PGPASSWORD="${dbPass}" pg_dump -h "${dbHost}" -p ${dbPort} -U "${dbUser}" -d "${dbName}" -F p -f "${localBackupPath}"`,
+      { maxBuffer: 10 * 1024 * 1024 }
     )
-    
-    fs.writeFileSync(localBackupPath, stdout)
 
     const stats = fs.statSync(localBackupPath)
     const fileSize = stats.size
