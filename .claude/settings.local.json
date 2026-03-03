@@ -14,7 +14,9 @@
       "Bash(npx ts-node:*)",
       "Bash(npx tsx:*)",
       "Bash(npm i:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(ls d:/Projetos/Invetrix/src/app/\\\\\\(dashboard\\\\\\))",
+      "Bash(ls d:/Projetos/Invetrix/src/app/\\\\\\(dashboard\\\\\\)/dashboard)"
     ]
   }
 }

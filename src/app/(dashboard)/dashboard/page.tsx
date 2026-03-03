@@ -1,11 +1,11 @@
 import { auth } from '@/lib/auth/config'
 import { prisma } from '@/lib/db/prisma'
-import { getResourceAccess } from '@/lib/auth/permissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui'
 import { Server, Key, Cloud, Users, Activity, AlertTriangle, Bell } from 'lucide-react'
 import { getInitialLocale } from '@/lib/i18n/server'
 import { getDictionary, translate } from '@/lib/i18n'
 import { localeTag } from '@/lib/i18n/locales'
+import type { PermissionAction } from '@prisma/client'
 
 type TelemetrySnapshot = {
   machineId: string
@@ -15,32 +15,71 @@ type TelemetrySnapshot = {
   createdAt: Date
 }
 
-async function buildAccessWhere(userId: string, isAdmin: boolean, resourceType: 'MACHINE' | 'CREDENTIAL') {
-  if (isAdmin) {
-    return { isActive: true }
-  }
+function buildWhereFromPermissions(
+  userId: string,
+  permissions: { resourceId: string | null }[]
+) {
+  const hasGlobalAccess = permissions.some((p) => p.resourceId === null)
+  if (hasGlobalAccess) return { isActive: true }
 
-  const access = await getResourceAccess({
-    userId,
-    resourceType,
-    action: 'READ',
-  })
-
-  if (access.isAdmin || access.hasGlobalAccess) {
-    return { isActive: true }
-  }
+  const resourceIds = permissions
+    .filter((p) => p.resourceId)
+    .map((p) => p.resourceId as string)
 
   const where: any = { isActive: true, OR: [{ createdById: userId }] }
-  if (access.resourceIds.length > 0) {
-    where.OR.push({ id: { in: access.resourceIds } })
+  if (resourceIds.length > 0) {
+    where.OR.push({ id: { in: resourceIds } })
   }
-
   return where
 }
 
+async function resolveAccessWheres(userId: string) {
+  // Busca usuário + grupos uma única vez
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { isActive: true, role: true, groups: { select: { groupId: true } } },
+  })
+
+  if (!user || !user.isActive) {
+    const fallback = { isActive: true, createdById: userId }
+    return { machineWhere: fallback, credentialWhere: fallback }
+  }
+
+  if (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN') {
+    return { machineWhere: { isActive: true }, credentialWhere: { isActive: true } }
+  }
+
+  const groupIds = user.groups.map((ug) => ug.groupId)
+  const orFilter = [
+    { userId },
+    ...(groupIds.length ? [{ groupId: { in: groupIds } }] : []),
+  ]
+
+  // Busca permissões de MACHINE e CREDENTIAL em paralelo
+  const [machinePerms, credentialPerms] = await Promise.all([
+    prisma.permission.findMany({
+      where: { resourceType: 'MACHINE', actions: { has: 'READ' as PermissionAction }, OR: orFilter },
+      select: { resourceId: true },
+    }),
+    prisma.permission.findMany({
+      where: { resourceType: 'CREDENTIAL', actions: { has: 'READ' as PermissionAction }, OR: orFilter },
+      select: { resourceId: true },
+    }),
+  ])
+
+  return {
+    machineWhere: buildWhereFromPermissions(userId, machinePerms),
+    credentialWhere: buildWhereFromPermissions(userId, credentialPerms),
+  }
+}
+
 async function getStats(userId: string, isAdmin: boolean) {
-  const machineWhere = await buildAccessWhere(userId, isAdmin, 'MACHINE')
-  const credentialWhere = await buildAccessWhere(userId, isAdmin, 'CREDENTIAL')
+  const { machineWhere, credentialWhere } = isAdmin
+    ? { machineWhere: { isActive: true }, credentialWhere: { isActive: true } }
+    : await resolveAccessWheres(userId)
+
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
 
   const [
     machinesCount,
@@ -58,7 +97,11 @@ async function getStats(userId: string, isAdmin: boolean) {
       where: isAdmin ? undefined : { userId },
       take: 5,
       orderBy: { timestamp: 'desc' },
-      include: {
+      select: {
+        id: true,
+        action: true,
+        resourceName: true,
+        timestamp: true,
         user: { select: { name: true } },
       },
     }),
@@ -70,37 +113,30 @@ async function getStats(userId: string, isAdmin: boolean) {
     isAdmin
       ? prisma.platform.count()
       : prisma.credential
-        .findMany({
-          where: {
-            ...credentialWhere,
-            platformId: { not: null },
-          },
-          select: { platformId: true },
-          distinct: ['platformId'],
-        })
-        .then((rows) => rows.filter((row) => row.platformId).length),
+          .groupBy({
+            by: ['platformId'],
+            where: { ...credentialWhere, platformId: { not: null } },
+          })
+          .then((rows) => rows.length),
   ])
 
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-
-  const machineIds = machines.map((machine) => machine.id)
+  const machineIds = machines.map((m) => m.id)
   const latestTelemetry = machineIds.length
     ? await prisma.machineTelemetry.findMany({
-      where: {
-        machineId: { in: machineIds },
-        createdAt: { gte: yesterday },
-      },
-      select: {
-        machineId: true,
-        cpuUsage: true,
-        memoryPercent: true,
-        containers: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'desc' },
-      distinct: ['machineId'],
-    })
+        where: {
+          machineId: { in: machineIds },
+          createdAt: { gte: yesterday },
+        },
+        select: {
+          machineId: true,
+          cpuUsage: true,
+          memoryPercent: true,
+          containers: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        distinct: ['machineId'],
+      })
     : []
 
   return {
@@ -127,57 +163,57 @@ export default async function DashboardPage() {
 
   const cards = isAdmin
     ? [
-      {
-        title: t('nav.machines'),
-        value: stats.machinesCount,
-        icon: Server,
-        color: 'bg-blue-500',
-      },
-      {
-        title: t('nav.credentials'),
-        value: stats.credentialsCount,
-        icon: Key,
-        color: 'bg-green-500',
-      },
-      {
-        title: t('nav.platforms'),
-        value: stats.platformsCount,
-        icon: Cloud,
-        color: 'bg-purple-500',
-      },
-      {
-        title: t('nav.users'),
-        value: stats.usersCount,
-        icon: Users,
-        color: 'bg-orange-500',
-      },
-    ]
+        {
+          title: t('nav.machines'),
+          value: stats.machinesCount,
+          icon: Server,
+          color: 'bg-blue-500',
+        },
+        {
+          title: t('nav.credentials'),
+          value: stats.credentialsCount,
+          icon: Key,
+          color: 'bg-green-500',
+        },
+        {
+          title: t('nav.platforms'),
+          value: stats.platformsCount,
+          icon: Cloud,
+          color: 'bg-purple-500',
+        },
+        {
+          title: t('nav.users'),
+          value: stats.usersCount,
+          icon: Users,
+          color: 'bg-orange-500',
+        },
+      ]
     : [
-      {
-        title: t('dashboard.cards.machines'),
-        value: stats.machinesCount,
-        icon: Server,
-        color: 'bg-blue-500',
-      },
-      {
-        title: t('dashboard.cards.credentials'),
-        value: stats.credentialsCount,
-        icon: Key,
-        color: 'bg-green-500',
-      },
-      {
-        title: t('dashboard.cards.platformsLinked'),
-        value: stats.platformsCount,
-        icon: Cloud,
-        color: 'bg-purple-500',
-      },
-      {
-        title: t('dashboard.cards.alerts'),
-        value: stats.alertsCount,
-        icon: Bell,
-        color: 'bg-orange-500',
-      },
-    ]
+        {
+          title: t('dashboard.cards.machines'),
+          value: stats.machinesCount,
+          icon: Server,
+          color: 'bg-blue-500',
+        },
+        {
+          title: t('dashboard.cards.credentials'),
+          value: stats.credentialsCount,
+          icon: Key,
+          color: 'bg-green-500',
+        },
+        {
+          title: t('dashboard.cards.platformsLinked'),
+          value: stats.platformsCount,
+          icon: Cloud,
+          color: 'bg-purple-500',
+        },
+        {
+          title: t('dashboard.cards.alerts'),
+          value: stats.alertsCount,
+          icon: Bell,
+          color: 'bg-orange-500',
+        },
+      ]
 
   const actionLabels: Record<string, string> = {
     CREATE: t('dashboard.actionLabels.CREATE'),
@@ -203,31 +239,23 @@ export default async function DashboardPage() {
 
   const isContainerRunning = (container: { state?: string; status?: string }) => {
     const state = (container.state || '').toLowerCase()
-    if (state) {
-      return state === 'running'
-    }
-    const status = (container.status || '').toLowerCase()
-    if (status.startsWith('up')) {
-      return true
-    }
-    return false
+    if (state) return state === 'running'
+    return (container.status || '').toLowerCase().startsWith('up')
   }
 
   for (const machine of stats.machines) {
     const telemetry = telemetryMap.get(machine.id)
     if (!telemetry) continue
 
-    if (telemetry.cpuUsage !== null && telemetry.cpuUsage !== undefined && telemetry.cpuUsage >= 80) {
+    if (telemetry.cpuUsage != null && telemetry.cpuUsage >= 80) {
       warningCounts.cpu += 1
     }
-
-    if (telemetry.memoryPercent !== null && telemetry.memoryPercent !== undefined && telemetry.memoryPercent >= 80) {
+    if (telemetry.memoryPercent != null && telemetry.memoryPercent >= 80) {
       warningCounts.memory += 1
     }
 
     const containers = Array.isArray(telemetry.containers) ? telemetry.containers : []
-    const downContainers = containers.filter((container) => !isContainerRunning(container))
-    if (downContainers.length > 0) {
+    if (containers.some((c) => !isContainerRunning(c))) {
       warningCounts.container += 1
     }
   }
@@ -318,10 +346,11 @@ export default async function DashboardPage() {
                 return (
                   <div
                     key={warning.key}
-                    className={`flex items-center justify-between rounded-lg p-3 ${isActive
+                    className={`flex items-center justify-between rounded-lg p-3 ${
+                      isActive
                         ? 'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-300'
                         : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                      }`}
+                    }`}
                   >
                     <div className="flex items-center gap-2">
                       <div

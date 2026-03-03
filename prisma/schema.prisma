@@ -129,6 +129,8 @@ model Permission {
   @@index([groupId])
   @@index([resourceType])
   @@index([resourceId])
+  @@index([userId, resourceType])
+  @@index([groupId, resourceType])
 }
 
 // ============ INVENTÁRIO E CREDENCIAIS ============
@@ -252,6 +254,7 @@ model MachineTelemetry {
 
   @@index([machineId])
   @@index([createdAt])
+  @@index([machineId, createdAt])
 }
 
 // ============ ALERTAS ============
@@ -390,6 +393,7 @@ model AuditLog {
   @@index([resourceId])
   @@index([timestamp])
   @@index([ipAddress])
+  @@index([userId, timestamp])
 }
 
 // ============ CONFIGURAÇÕES ============
